@@ -7,7 +7,7 @@ from geopy.geocoders import Nominatim
 from datetime import datetime
 
 # Load trained model and encoder
-model = joblib.load("catboost.pkl")
+model = joblib.load("Catboost.pkl")
 target_encoder = joblib.load("target_encoder.pkl")
 
 # Define city center for distance calculation
