@@ -14,10 +14,12 @@ target_encoder = joblib.load("target_encoder.pkl")
 city_center = (31.0689, -91.9968)  # Example: Louisiana
 
 # Function to calculate distance to city center
+@st.cache_resource
 def calculate_distance(lat, lon, center=city_center):
     return geopy.distance.distance((lat, lon), center).km
 
 # Function to get coordinates from an address
+@st.cache_resource
 def get_coordinates(address):
     geolocator = Nominatim(user_agent="my_unique_app")
     location = geolocator.geocode(address)
