@@ -40,6 +40,7 @@ def get_coordinates(address):
 
 # Load cached model and encoder
 model = load_model()
+model_features = model.feature_names_  # Get expected features
 target_encoder = load_encoder()
 df_sales_history = load_sales_data()
 
@@ -120,17 +121,24 @@ if latitude is not None and longitude is not None:
         "Town Avg Sale Price", "Quarter Sold", "Days Since Listing"
     ]
 
-    input_data = new_entry[final_features]
-
+    # Ensure new_entry has all required features (fill missing ones)
+    for col in model_features:
+        if col not in new_entry.columns:
+            new_entry[col] = np.nan  # Fill missing with NaN
+    
+    # Keep only model-expected features
+    input_data = new_entry[model_features]
+    
     # Display processed input
     st.write("Processed Input Data:")
     st.write(input_data)
-
+    
     # **PREDICTION BUTTON**
     if st.button("Predict"):
-        predicted_sale_amount = model.predict(input_data)[0]
-        st.subheader("Predicted Sale Amount")
-        st.write(f"$ {predicted_sale_amount:,.2f}")
-
-else:
-    st.warning("Please enter a valid location (Longitude & Latitude or Address) to proceed.")
+        missing_features = [col for col in model_features if col not in input_data.columns]
+        if missing_features:
+            st.error(f"Missing features in input data: {missing_features}")
+        else:
+            predicted_sale_amount = model.predict(input_data)[0]
+            st.subheader("Predicted Sale Amount")
+            st.write(f"$ {predicted_sale_amount:,.2f}")
