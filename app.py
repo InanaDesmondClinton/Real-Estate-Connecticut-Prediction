@@ -5,7 +5,6 @@ import joblib
 import geopy.distance
 from geopy.geocoders import Nominatim
 from datetime import datetime
-import h5py
 from functools import lru_cache
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, AdaBoostRegressor, StackingRegressor
 from xgboost import XGBRegressor
@@ -16,31 +15,8 @@ from sklearn.linear_model import Ridge
 # Cache expensive operations
 @st.cache_resource
 def load_model():
-    model_mapping = {
-        "rf": RandomForestRegressor,
-        "xgb": XGBRegressor,
-        "lgbm": LGBMRegressor,
-        "cat": CatBoostRegressor,
-        "gb": GradientBoostingRegressor,
-        "ada": AdaBoostRegressor
-    }
-    
-    base_models = []
-    with h5py.File("stacked_model.h5", "r") as hf:
-        for key in hf.keys():
-            if key.startswith("model_"):
-                model_group = hf[key]
-                if 'name' in model_group.attrs:
-                    model_name = model_group.attrs['name']
-                    model_params = {k: v for k, v in model_group.attrs.items() if k != 'name'}
-                    if model_name in model_mapping:
-                        model = model_mapping[model_name](**model_params)
-                        base_models.append((model_name, model))
-
-        meta_params = {k: v for k, v in hf["meta_model"].attrs.items()}
-        meta_model = Ridge(**meta_params)
-    
-    return StackingRegressor(estimators=base_models, final_estimator=meta_model, n_jobs=-1)
+    model = joblib.load("stacked_model.pkl")
+    return model
 
 @st.cache_resource
 def load_encoder():
