@@ -96,7 +96,7 @@ def prepare_input_data(new_entry, historical_df, town_stats):
         "Sales Ratio", "Assessed Value", "Market Trend Score", "Sales Ratio × Town", 
         "Sales Ratio Normalized", "Month Sold", "Longitude", "Latitude", "Town", 
         "Distance to City Center", "Property Type", "Day of Week Sold", "List Year", 
-        "Year Sold", "Residential Type", "Town Avg Sale Price", "Quarter Sold", 
+        "Year Sold", "Residential Type", "Town_Avg_Sale_Price", "Quarter Sold", 
         "Days Since Listing"
     ]
     
