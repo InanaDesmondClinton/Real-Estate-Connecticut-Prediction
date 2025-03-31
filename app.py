@@ -31,7 +31,7 @@ def load_historical_data():
     # Pre-compute all possible features once with NaN handling
     df['Date Recorded'] = pd.to_datetime(df['Date Recorded'], errors='coerce')
     df["Day of Week Sold"] = df["Date Recorded"].dt.weekday.fillna(0)
-    df["Quarter Sold"] = ((df["Month Sold"].fillna(1) - 1) // 3 + 1
+    df["Quarter Sold"] = (df["Month Sold"].fillna(1) - 1) // 3 + 1
     current_year = datetime.today().year
     df["Days Since Listing"] = (current_year - df["Year Sold"].fillna(current_year)) * 365
     
