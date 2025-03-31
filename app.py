@@ -9,7 +9,7 @@ from datetime import datetime
 # Load trained model and encoder once (cached for efficiency)
 @st.cache_resource
 def load_model():
-    return joblib.load("stacked_model.pkl")
+    return joblib.load("CatBoost.pkl")
 
 @st.cache_resource
 def load_encoder():
