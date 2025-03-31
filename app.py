@@ -130,8 +130,8 @@ if latitude is not None and longitude is not None:
     input_data = new_entry[model_features]
     
     # Display processed input
-    st.write("Processed Input Data:")
-    st.write(input_data)
+    # st.write("Processed Input Data:")
+    # st.write(input_data)
     
     # **PREDICTION BUTTON**
     if st.button("Predict"):
