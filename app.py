@@ -116,7 +116,7 @@ if latitude is not None and longitude is not None:
     final_features = [
         "Sales Ratio", "Assessed Value", "Market Trend Score", "Sales Ratio × Town", "Sales Ratio Normalized",
         "Month Sold", "Longitude", "Latitude", "Town", "Distance to City Center",
-        "Property Type", "Day of Week Sold", "Year Sold", "Residential Type",
+        "Property Type", "Day of Week Sold", "List Year", "Year Sold", "Residential Type",
         "Town Avg Sale Price", "Quarter Sold", "Days Since Listing"
     ]
 
