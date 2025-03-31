@@ -5,12 +5,15 @@ import joblib
 import geopy.distance
 from geopy.geocoders import Nominatim
 from datetime import datetime
+import h5py
 from functools import lru_cache
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, AdaBoostRegressor, StackingRegressor
 from xgboost import XGBRegressor
 from lightgbm import LGBMRegressor
 from catboost import CatBoostRegressor
 from sklearn.linear_model import Ridge
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import make_pipeline
 
 # Cache expensive operations
 @st.cache_resource
@@ -25,34 +28,42 @@ def load_encoder():
 @st.cache_data
 def load_historical_data():
     df = pd.read_csv("cleaned_sales_data.csv")
-    # Pre-compute all possible features once
+    # Pre-compute all possible features once with NaN handling
     df['Date Recorded'] = pd.to_datetime(df['Date Recorded'], errors='coerce')
-    df["Day of Week Sold"] = df["Date Recorded"].dt.weekday
-    df["Quarter Sold"] = (df["Month Sold"] - 1) // 3 + 1
-    df["Days Since Listing"] = (datetime.today().year - df["Year Sold"]) * 365
+    df["Day of Week Sold"] = df["Date Recorded"].dt.weekday.fillna(0)
+    df["Quarter Sold"] = ((df["Month Sold"].fillna(1) - 1) // 3 + 1
+    current_year = datetime.today().year
+    df["Days Since Listing"] = (current_year - df["Year Sold"].fillna(current_year)) * 365
     
-    # Pre-compute town averages
+    # Pre-compute town averages with NaN handling
     town_stats = df.groupby('Town').agg({
         'Sales Ratio': ['mean', 'std'],
         'Sale Amount': 'mean'
     }).reset_index()
     town_stats.columns = ['Town', 'Town_Sales_Ratio_Mean', 'Town_Sales_Ratio_Std', 'Town_Avg_Sale_Price']
     
+    # Fill NaN values in town stats
+    town_stats['Town_Sales_Ratio_Mean'] = town_stats['Town_Sales_Ratio_Mean'].fillna(df['Sales Ratio'].mean())
+    town_stats['Town_Sales_Ratio_Std'] = town_stats['Town_Sales_Ratio_Std'].fillna(df['Sales Ratio'].std())
+    town_stats['Town_Avg_Sale_Price'] = town_stats['Town_Avg_Sale_Price'].fillna(df['Sale Amount'].mean())
+    
     return df, town_stats
 
-# Distance calculation function
 def calculate_distance(lat, lon, center=(31.0689, -91.9968)):
-    """Calculate distance in kilometers between two points on Earth"""
+    """Calculate distance in kilometers between two points on Earth with NaN handling"""
     try:
+        if pd.isna(lat) or pd.isna(lon):
+            return 0.0
         return geopy.distance.distance((lat, lon), center).km
     except Exception as e:
         st.error(f"Error calculating distance: {e}")
         return 0.0
 
-# Cache geocoding results
 @lru_cache(maxsize=1000)
 def get_coordinates_cached(address):
-    """Get coordinates from address with caching"""
+    """Get coordinates from address with caching and error handling"""
+    if not address:
+        return (None, None)
     geolocator = Nominatim(user_agent="my_unique_app")
     try:
         location = geolocator.geocode(address)
@@ -64,18 +75,23 @@ def get_coordinates_cached(address):
         return (None, None)
 
 def prepare_input_data(new_entry, historical_df, town_stats):
-    """Prepare input data for prediction with feature engineering"""
+    """Prepare input data for prediction with robust NaN handling"""
+    # Ensure numeric columns are properly typed
+    numeric_cols = ['Assessed Value', 'Sales Ratio', 'Year Sold', 'Month Sold']
+    for col in numeric_cols:
+        new_entry[col] = pd.to_numeric(new_entry[col], errors='coerce')
+    
     # Merge with pre-computed town stats
     input_data = pd.merge(new_entry, town_stats, on='Town', how='left')
     
-    # Calculate remaining features
+    # Calculate remaining features with NaN handling
     input_data['Sales Ratio Normalized'] = (
         (input_data['Sales Ratio'] - input_data['Town_Sales_Ratio_Mean']) / 
-        input_data['Town_Sales_Ratio_Std']
+        input_data['Town_Sales_Ratio_Std'].replace(0, 1)  # Avoid division by zero
     ).fillna(0)
     
     input_data['Sales Ratio × Town'] = (
-        input_data['Sales Ratio'] * input_data['Town_Avg_Sale_Price']
+        input_data['Sales Ratio'].fillna(0) * input_data['Town_Avg_Sale_Price'].fillna(0)
     )
     
     # Calculate distance to city center
@@ -84,12 +100,17 @@ def prepare_input_data(new_entry, historical_df, town_stats):
         axis=1
     )
     
-    # Get market trend from cached data
-    recent_sales = historical_df[
-        (historical_df['Town'] == new_entry['Town'].iloc[0]) &
-        (historical_df['Date Recorded'] >= (datetime.today() - pd.Timedelta(days=90)))
-    ]
-    input_data['Market Trend Score'] = recent_sales['Sale Amount'].mean()
+    # Get market trend from cached data with NaN handling
+    try:
+        recent_sales = historical_df[
+            (historical_df['Town'] == new_entry['Town'].iloc[0]) &
+            (historical_df['Date Recorded'] >= (datetime.today() - pd.Timedelta(days=90)))
+        ]
+        market_trend = recent_sales['Sale Amount'].mean()
+    except:
+        market_trend = historical_df['Sale Amount'].mean()
+    
+    input_data['Market Trend Score'] = market_trend
     
     # Select final features for model
     final_features = [
@@ -100,6 +121,14 @@ def prepare_input_data(new_entry, historical_df, town_stats):
         "Days Since Listing"
     ]
     
+    # Ensure all columns exist and fill any remaining NaNs
+    for col in final_features:
+        if col not in input_data.columns:
+            input_data[col] = 0.0
+    
+    # Convert all to numeric and fill NaNs
+    input_data[final_features] = input_data[final_features].apply(pd.to_numeric, errors='coerce').fillna(0)
+    
     return input_data[final_features]
 
 # Initialize all cached resources at startup
@@ -107,7 +136,7 @@ model = load_model()
 target_encoder = load_encoder()
 historical_df, town_stats = load_historical_data()
 
-# Streamlit UI
+# Streamlit UI (same as before)
 st.title("Real Estate Sale Amount Prediction")
 st.write("Enter details to predict the sale amount of a property.")
 
@@ -195,14 +224,20 @@ if latitude is not None and longitude is not None:
     # Display processed data
     st.write("Processed Input Data:")
     st.write(input_data)
-    
-    # Prediction button
-    if st.button("Predict"):
-        try:
-            predicted_sale_amount = model.predict(input_data)[0]
-            st.subheader("Predicted Sale Amount")
-            st.write(f"$ {predicted_sale_amount:,.2f}")
-        except Exception as e:
-            st.error(f"Prediction error: {e}")
-else:
-    st.warning("Please enter a valid location to proceed.")
+
+# In the prediction section:
+if st.button("Predict"):
+    try:
+        # Prepare input data
+        input_data = prepare_input_data(new_entry, historical_df, town_stats)
+        
+        # Encode categorical variables
+        cat_cols = ["Property Type", "Residential Type", "Town"]
+        input_data[cat_cols] = target_encoder.transform(input_data[cat_cols])
+        
+        # Make prediction
+        predicted_sale_amount = model.predict(input_data)[0]
+        st.subheader("Predicted Sale Amount")
+        st.write(f"$ {predicted_sale_amount:,.2f}")
+    except Exception as e:
+        st.error(f"Prediction error: {str(e)}")
