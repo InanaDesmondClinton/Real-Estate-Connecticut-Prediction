@@ -33,7 +33,7 @@ def calculate_distance(lat, lon, center=(31.0689, -91.9968)):
 @st.cache_data
 def get_coordinates(address):
     geolocator = Nominatim(user_agent="my_unique_app")
-    location = geolocator.geocode(address)
+    location = geolocator.geocode(address, timeout=10)
     if location:
         return location.latitude, location.longitude
     return None, None
